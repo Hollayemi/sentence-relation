@@ -33,6 +33,7 @@ def get_similarity(sentence1: str, sentence2: str) -> float:
     
     # Convert cosine similarity score (-1 to 1) to a percentage (0 to 100)
     percentage_similarity = (similarity_score + 1) / 2 * 100
+    print(percentage_similarity)
     return percentage_similarity
 
 # API route to calculate sentence similarity
