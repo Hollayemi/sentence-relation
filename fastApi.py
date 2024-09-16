@@ -1,31 +1,43 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from pydantic import BaseModel
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoModel
 import torch
+import torch.nn.functional as F
 
-# Load pre-trained model and tokenizer
-model_name = "sentence-transformers/all-MiniLM-L6-v2"
+# Load pre-trained model and tokenizer for sentence embeddings
+model_name = "sentence-transformers/all-MiniLM-L6-v2"  # Embedding model
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForSequenceClassification.from_pretrained(model_name)
+model = AutoModel.from_pretrained(model_name)
 
-# Initialize FastAPI app
+# FastAPI app initialization
 app = FastAPI()
 
-# Create a request model to receive the sentences
-class SentencesInput(BaseModel):
+# Data model for request body
+class Sentences(BaseModel):
     sentence1: str
     sentence2: str
 
-# Function to get similarity between two sentences
-def get_similarity(sentence1, sentence2):
-    inputs = tokenizer.encode_plus(sentence1, sentence2, return_tensors='pt', truncation=True)
+# Define the similarity function using cosine similarity
+def get_similarity(sentence1: str, sentence2: str) -> float:
+    # Tokenize and encode the sentences
+    inputs1 = tokenizer(sentence1, return_tensors='pt', padding=True, truncation=True)
+    inputs2 = tokenizer(sentence2, return_tensors='pt', padding=True, truncation=True)
+    
+    # Get embeddings from the model
     with torch.no_grad():
-        outputs = model(**inputs)
-    similarity_score = torch.nn.functional.softmax(outputs.logits, dim=1)[0][1].item()
-    return similarity_score
+        embedding1 = model(**inputs1).last_hidden_state.mean(dim=1)  # Mean pooling
+        embedding2 = model(**inputs2).last_hidden_state.mean(dim=1)  # Mean pooling
 
-# Define the API endpoint
+    # Calculate cosine similarity between the two embeddings
+    similarity_score = F.cosine_similarity(embedding1, embedding2).item()
+    
+    # Convert cosine similarity score (-1 to 1) to a percentage (0 to 100)
+    percentage_similarity = (similarity_score + 1) / 2 * 100
+    print(percentage_similarity)
+    return percentage_similarity
+
+# API route to calculate sentence similarity
 @app.post("/similarity")
-async def compute_similarity(sentences: SentencesInput):
+def calculate_similarity(sentences: Sentences):
     similarity = get_similarity(sentences.sentence1, sentences.sentence2)
-    return {"similarity_score": similarity}
+    return {"similarity_percentage": similarity}
